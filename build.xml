@@ -10,9 +10,11 @@
     <property name="version" value="1.0" />
     <property name="hadoop.home" location="${env.HADOOP_HOME}"/>
 
-    <property name="src.dir"     value="src/java"/>
+    <property name="src.dir"     value="src/main/java"/>
+    <property name="test.dir"     value="src/test/java"/>
     <property name="build.dir"   value="build"/>
     <property name="classes.dir" value="${build.dir}/classes"/>
+    <property name="classes.test.dir" value="${build.dir}/classes"/>
     <property name="jar.dir"     value="dist"/>
     <property name="lib.dir"     value="lib"/>
 
@@ -24,6 +26,11 @@
                  <!--includes="contrib/streaming/hadoop-streaming-*.jar" />-->
     </path>
 
+    <path id="classpath.test">
+        <path refid="classpath"/>
+        <pathelement location="${classes.dir}"/>
+    </path>
+
     <target name="clean">
         <delete dir="${build.dir}"/>
         <delete dir="${jar.dir}"/>
@@ -33,6 +40,21 @@
         <mkdir dir="${classes.dir}"/>
         <javac srcdir="${src.dir}" destdir="${classes.dir}" debug="on"
                classpathref="classpath"/>
+        <javac srcdir="${test.dir}" destdir="${classes.test.dir}" debug="on"
+               classpathref="classpath.test"/>
+    </target>
+
+    <target name="test" depends="compile">
+        <junit printsummary="yes" fork="yes" haltonfailure="yes">
+            <formatter type="plain" usefile="false"/>
+            <classpath>
+                <pathelement location="lib/junit-4.10.jar"/>
+                <path refid="classpath.test"/>
+            </classpath>
+            <batchtest>
+                <fileset dir="${test.dir}"/>
+            </batchtest>
+        </junit>
     </target>
 
     <target name="jar" depends="compile">

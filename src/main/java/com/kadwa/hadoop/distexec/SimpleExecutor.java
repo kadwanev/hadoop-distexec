@@ -38,7 +38,7 @@ public class SimpleExecutor extends Thread implements Executor {
         }
     }
 
-    public long getBytesOutput() {
+    public long getBytesOutputCount() {
         return outPrinter.getBytesXfered();
     }
 
