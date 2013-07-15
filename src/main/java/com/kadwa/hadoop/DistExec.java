@@ -23,6 +23,7 @@ exception statement from your version. */
 
 package com.kadwa.hadoop;
 
+import com.kadwa.hadoop.distexec.CommandLineUtil;
 import com.kadwa.hadoop.distexec.SimpleExecutor;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -265,7 +266,8 @@ public class DistExec implements Tool {
                 // open tmp file
                 out = create(tmpfile, reporter, srcstat);
 
-                ProcessBuilder builder = new ProcessBuilder(this.execCmd);
+                ProcessBuilder builder = new ProcessBuilder(CommandLineUtil.translateCommandline(this.execCmd));
+
                 builder.directory(new File("."));
 
                 SimpleExecutor executor = SimpleExecutor.execute(builder, in, out, System.err);
