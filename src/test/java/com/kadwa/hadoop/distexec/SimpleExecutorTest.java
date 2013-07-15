@@ -11,7 +11,6 @@ import org.junit.runners.JUnit4;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
-import java.io.StringBufferInputStream;
 
 import static org.junit.Assert.*;
 
@@ -28,7 +27,7 @@ public class SimpleExecutorTest {
         ByteArrayOutputStream errorStream = new ByteArrayOutputStream();
 
         ProcessBuilder builder = new ProcessBuilder("cat");
-        builder.directory(new File("."));
+//        builder.directory(new File("."));
         Executor executor = SimpleExecutor.execute(builder, new ByteArrayInputStream(testString.getBytes()), outputStream, errorStream);
 
         executor.waitFor();

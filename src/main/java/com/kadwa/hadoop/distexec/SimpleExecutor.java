@@ -14,26 +14,26 @@ public class SimpleExecutor extends Thread implements Executor {
     public static final Log LOG = LogFactory.getLog(SimpleExecutor.class);
 
     private Process process;
-    BackgroundPrinter inPrinter;
-    BackgroundPrinter outPrinter;
-    BackgroundPrinter errPrinter;
+    SingleTransferThread inPrinter;
+    SingleTransferThread outPrinter;
+    SingleTransferThread errPrinter;
 
     private SimpleExecutor(ProcessBuilder builder, InputStream inputStream,
                            OutputStream outputStream, OutputStream errorStream) throws IOException {
         process = builder.start();
         if (outputStream != null) {
             InputStream processOut = new BufferedInputStream(process.getInputStream(), BUFFER_SIZE); // STDOUT
-            outPrinter = new BackgroundPrinter(processOut, outputStream, false, "STDOUT");
+            outPrinter = new SingleTransferThread(processOut, outputStream, false, "STDOUT");
             outPrinter.start();
         }
         if (errorStream != null) {
             InputStream processErr = new BufferedInputStream(process.getErrorStream(), BUFFER_SIZE); // STDERR
-            errPrinter = new BackgroundPrinter(processErr, errorStream, false, "STDERR");
+            errPrinter = new SingleTransferThread(processErr, errorStream, false, "STDERR");
             errPrinter.start();
         }
         if (inputStream != null) {
             OutputStream processIn = new BufferedOutputStream(process.getOutputStream(), BUFFER_SIZE); // STDIN
-            inPrinter = new BackgroundPrinter(inputStream, processIn, true, "STDIN");
+            inPrinter = new SingleTransferThread(inputStream, processIn, true, "STDIN");
             inPrinter.start();
         }
     }
@@ -71,14 +71,14 @@ public class SimpleExecutor extends Thread implements Executor {
     }
 
 
-    private static class BackgroundPrinter extends Thread {
+    private static class SingleTransferThread extends Thread {
         private InputStream in;
         private OutputStream out;
         private boolean transferClose;
         private long bytesXfered;
         private String logTag;
 
-        public BackgroundPrinter(InputStream in, OutputStream out, boolean transferClose, String logTag) {
+        public SingleTransferThread(InputStream in, OutputStream out, boolean transferClose, String logTag) {
             this.in = in;
             this.out = out;
             this.transferClose = transferClose;
@@ -86,7 +86,7 @@ public class SimpleExecutor extends Thread implements Executor {
         }
 
         public void run() {
-            System.err.println("Start BackgroundPrinter: " + logTag);
+            System.err.println("Start SingleTransferThread: " + logTag);
             try {
                 // read buffer
                 byte[] buf = new byte[1024];
@@ -102,11 +102,11 @@ public class SimpleExecutor extends Thread implements Executor {
             }
             finally {
                 if (transferClose) {
-                    LOG.debug("Transferring Close BackgroundPrinter: " + logTag);
+                    LOG.debug("Transferring Close SingleTransferThread: " + logTag);
                     try { out.close(); } catch (IOException iex) { /*ignored*/ }
                 }
             }
-            LOG.debug("Returning BackgroundPrinter: " + logTag + " (" + bytesXfered + ")");
+            LOG.debug("Returning SingleTransferThread: " + logTag + " (" + bytesXfered + ")");
         }
 
         public long getBytesXfered() {
@@ -115,7 +115,7 @@ public class SimpleExecutor extends Thread implements Executor {
 
         public void close() {
             try {
-                LOG.debug("Closing BackgroundPrinter: " + logTag + " (" + bytesXfered + ")");
+                LOG.debug("Closing SingleTransferThread: " + logTag + " (" + bytesXfered + ")");
                 this.in.close();
             } catch (Exception e) {
             }
