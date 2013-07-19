@@ -1,16 +1,21 @@
-= hadoop-distexec
+# Hadoop Distributed Execution
+
+Distributed command execution for Hadoop.
+
+Implemented as a tool similarly to distcp.
+
+## Examples
+
+Simple cat: `hadoop distexec /source /dest cat`  
+Convert encoding: `hadoop distexec /source /dest 'iconv -f iso8859-1 -t utf-8'`  
 
 
-Distributed command execution on Hadoop MapReduce.
-
-Implemented similarly to distcp as a tool.
-
-== Installing
+## Installing
 
 Build using ant and copy hadoop-distexec.jar to $HADOOP_HOME/lib
 
 
-== Optional Tool Install (patch $HADOOP_HOME/bin/hadoop):
+#### Optional Tool Install (patch $HADOOP_HOME/bin/hadoop):
 ```shell
   echo "  distcp <srcurl> <desturl> copy file or directories recursively"
 +  echo "  distexec <srcurl> <desturl> <exec cmd> execute pipe command on file or directories recursively"
@@ -34,7 +39,7 @@ elif [ "$COMMAND" = "daemonlog" ] ; then
   HADOOP_HEAPSIZE_OVERRIDE="$HADOOP_CLIENT_HEAPSIZE"
 ```
 
-== Running
+## Running
 
 ```shell
 distexec [OPTIONS] <srcurl>* <desturl> <exec cmd>
@@ -44,13 +49,10 @@ OPTIONS:
 -m <num_maps>          Maximum number of simultaneous executions
 ```
 
-Simple copy test:
-```
-hadoop distexec /some/location /some/transformed cat
-```
+#### TODO List maintained in Issues
 
-TODO list maintained in Issues
+## License
 
-== License
+Licensed under GPLv2 with linking exception.  
+Additional Props requirements described in LICENSE file.  
 
-Licensed under GPLv2 with linking exception. Additional Props requirements described in LICENSE file.
