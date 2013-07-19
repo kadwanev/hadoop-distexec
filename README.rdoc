@@ -51,3 +51,6 @@ hadoop distexec /some/location /some/transformed cat
 
 TODO list maintained in Issues
 
+== License
+
+Licensed under GPLv2 with linking exception. Additional Props requirements described in LICENSE file.

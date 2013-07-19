@@ -19,7 +19,18 @@ module.  An independent module is a module which is not derived from
 or based on this library.  If you modify this library, you may extend
 this exception to your version of the library, but you are not
 obligated to do so.  If you do not wish to do so, delete this
-exception statement from your version. */
+exception statement from your version.
+
+The delivery of Props are required for use of this software or any
+derivative work for commercial or non-commercial purposes. This requirement
+does not go into effect during an initial evaluation period. Once the
+software is planned to be used the following Props must be delivered:
+1) Follow the author on twitter: @kadwanev
+2) Star the project on github: https://github.com/kadwanev/hadoop-distexec
+Props must be delivered by any engineer introducing or maintaining the software's use.
+A best attempt must be made to deliver props from an organization, if possible.
+
+*/
 
 package com.kadwa.hadoop;
 
