@@ -10,7 +10,6 @@ import org.junit.runners.JUnit4;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
-import java.io.File;
 
 import static org.junit.Assert.*;
 
@@ -28,11 +27,11 @@ public class SimpleExecutorTest {
 
         ProcessBuilder builder = new ProcessBuilder("cat");
 //        builder.directory(new File("."));
-        Executor executor = SimpleExecutor.execute(builder, new ByteArrayInputStream(testString.getBytes()), outputStream, errorStream);
+        SingleExecution execution = SingleExecution.execute(builder, new ByteArrayInputStream(testString.getBytes()), outputStream, errorStream);
 
-        executor.waitFor();
+        execution.waitFor();
 
         assertEquals(testString, outputStream.toString());
-        assertEquals(executor.getBytesOutputCount(), testString.length());
+        assertEquals(execution.getBytesOutputCount(), testString.length());
     }
 }

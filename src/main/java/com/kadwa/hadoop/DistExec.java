@@ -35,7 +35,8 @@ A best attempt must be made to deliver props from an organization, if possible.
 package com.kadwa.hadoop;
 
 import com.kadwa.hadoop.distexec.CommandLineUtil;
-import com.kadwa.hadoop.distexec.SimpleExecutor;
+import com.kadwa.hadoop.distexec.Executor;
+import com.kadwa.hadoop.distexec.SingleExecution;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.conf.Configuration;
@@ -277,15 +278,8 @@ public class DistExec implements Tool {
                 // open tmp file
                 out = create(tmpfile, reporter, srcstat);
 
-                ProcessBuilder builder = new ProcessBuilder(CommandLineUtil.translateCommandline(this.execCmd));
-
-                builder.directory(new File("."));
-
-                SimpleExecutor executor = SimpleExecutor.execute(builder, in, out, System.err);
-
-                int exitVal = executor.waitFor();
-                if (exitVal != 0)
-                    throw new IOException("Process returned with code " + exitVal);
+                Executor executor = new Executor(this.execCmd, in, out);
+                executor.execute();
                 reporter.incrCounter(Counter.BYTESWRITTEN, executor.getBytesOutputCount());
             } catch(InterruptedException iex) {
                 throw new IOException("Process was interrupted", iex);
@@ -295,7 +289,7 @@ public class DistExec implements Tool {
             }
 
             if (totfiles == 1) {
-                // Copying a single file; use dst path provided by user as destination
+                // Running a single file; use dst path provided by user as destination
                 // rather than destination directory, if a file
                 Path dstparent = absdst.getParent();
                 if (!(destFileSys.exists(dstparent) &&
@@ -848,8 +842,8 @@ public class DistExec implements Tool {
                         args.dst.getParent() : args.dst, "_" + NAME + "_tmp_" + randomId);
         jobConf.set(TMP_DIR_LABEL, tmpDir.toUri().toString());
         LOG.info("sourcePathsCount=" + srcCount);
-        LOG.info("filesToCopyCount=" + fileCount);
-        LOG.info("bytesToCopyCount=" + StringUtils.humanReadableInt(byteCount));
+        LOG.info("filesToExecCount=" + fileCount);
+        LOG.info("bytesToExecCount=" + StringUtils.humanReadableInt(byteCount));
         jobConf.setInt(SRC_COUNT_LABEL, srcCount);
         jobConf.setLong(TOTAL_SIZE_LABEL, byteCount);
         setMapCount(fileCount, jobConf);

@@ -8,18 +8,18 @@ import java.io.*;
 /**
  * Created by Neville Kadwa.
  */
-public class SimpleExecutor extends Thread implements Executor {
+public class SingleExecution {
 
     private final static int BUFFER_SIZE = 128 * 1024;
-    public static final Log LOG = LogFactory.getLog(SimpleExecutor.class);
+    public static final Log LOG = LogFactory.getLog(SingleExecution.class);
 
     private Process process;
     SingleTransferThread inPrinter;
     SingleTransferThread outPrinter;
     SingleTransferThread errPrinter;
 
-    private SimpleExecutor(ProcessBuilder builder, InputStream inputStream,
-                           OutputStream outputStream, OutputStream errorStream) throws IOException {
+    private SingleExecution(ProcessBuilder builder, InputStream inputStream,
+                            OutputStream outputStream, OutputStream errorStream) throws IOException {
         process = builder.start();
         if (outputStream != null) {
             InputStream processOut = new BufferedInputStream(process.getInputStream(), BUFFER_SIZE); // STDOUT
@@ -42,32 +42,23 @@ public class SimpleExecutor extends Thread implements Executor {
         return outPrinter.getBytesXfered();
     }
 
-    @Override
     public int waitFor() throws InterruptedException {
-        System.err.println("Initiating waitFor");
         int exitVal = process.waitFor();
-        System.err.println("waitFor returned " + exitVal);
         if (outPrinter != null) {
-            System.err.println("joining out");
             outPrinter.join(10000);
-            System.err.println("joining out completed");
         }
         if (errPrinter != null) {
-            System.err.println("joining err");
             errPrinter.join(10000);
-            System.err.println("joining err completed");
         }
         if (inPrinter != null) {
-            System.err.println("closing in");
             inPrinter.close();
-            System.err.println("closing in completed");
         }
         return exitVal;
     }
 
-    public static SimpleExecutor execute(ProcessBuilder builder, InputStream inputStream,
+    public static SingleExecution execute(ProcessBuilder builder, InputStream inputStream,
                                          OutputStream outputStream, OutputStream errorStream) throws IOException {
-        return new SimpleExecutor(builder, inputStream, outputStream, errorStream);
+        return new SingleExecution(builder, inputStream, outputStream, errorStream);
     }
 
 
@@ -86,7 +77,6 @@ public class SimpleExecutor extends Thread implements Executor {
         }
 
         public void run() {
-            System.err.println("Start SingleTransferThread: " + logTag);
             try {
                 // read buffer
                 byte[] buf = new byte[1024];
@@ -102,7 +92,6 @@ public class SimpleExecutor extends Thread implements Executor {
             }
             finally {
                 if (transferClose) {
-                    LOG.debug("Transferring Close SingleTransferThread: " + logTag);
                     try { out.close(); } catch (IOException iex) { /*ignored*/ }
                 }
             }
