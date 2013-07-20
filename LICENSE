@@ -30,5 +30,7 @@ does not go into effect during an initial evaluation period. Once the
 software is planned to be used the following Props must be delivered:
 1) Follow the author on twitter: @kadwanev
 2) Star the project on github: https://github.com/kadwanev/hadoop-distexec
-Props must be delivered by any engineer introducing or maintaining the software's use.
-A best attempt must be made to deliver props from an organization, if possible.
+Props must be delivered by any engineer at an organization introducing
+or maintaining the software's use in every team.
+Only a credited entry in CONTRIBUTORS releases the engineer or organization from
+maintaining Props.
