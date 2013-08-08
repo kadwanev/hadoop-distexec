@@ -36,9 +36,9 @@ maintaining Props.
 
 package com.kadwa.hadoop;
 
-import com.kadwa.hadoop.distexec.CommandLineUtil;
+import com.kadwa.hadoop.distexec.ExecFilesMapper;
 import com.kadwa.hadoop.distexec.Executor;
-import com.kadwa.hadoop.distexec.SingleExecution;
+import com.kadwa.hadoop.distexec.FilePair;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.conf.Configuration;
@@ -69,7 +69,7 @@ public class DistExec implements Tool {
     private static final String usage = NAME
             + " [OPTIONS] <srcurl>* <desturl> <exec cmd>" +
             "\n\nOPTIONS:" +
-            "\n-singleOut             Combine all output to single" +
+            "\n-redirectErrorToOut             Stderr output is combined with stdout" +
             "\n-m <num_maps>          Maximum number of simultaneous executions" +
             "\n";
 
@@ -77,12 +77,10 @@ public class DistExec implements Tool {
     private static final int MAX_MAPS_PER_NODE = 20;
     private static final int SYNC_FILE_MAX = 10;
 
-    static enum Counter {EXECUTED, FAIL, BYTESEXECUTED, BYTESWRITTEN}
+    public static enum Options {
+        REDIRECT_ERROR_TO_OUT("-redirectErrorToOut", NAME + ".redirect.error_to_out");
 
-    static enum Options {
-        SINGLE_OUT("-singleOut", NAME + ".single.out");
-
-        final String cmd, propertyname;
+        public final String cmd, propertyname;
 
         private Options(String cmd, String propertyname) {
             this.cmd = cmd;
@@ -90,15 +88,15 @@ public class DistExec implements Tool {
         }
     }
 
-    static final String EXEC_CMD_LABEL = NAME + ".exec.cmd";
-    static final String TMP_DIR_LABEL = NAME + ".tmp.dir";
-    static final String DST_DIR_LABEL = NAME + ".dest.path";
-    static final String JOB_DIR_LABEL = NAME + ".job.dir";
-    static final String MAX_MAPS_LABEL = NAME + ".max.map.tasks";
-    static final String SRC_LIST_LABEL = NAME + ".src.list";
-    static final String SRC_COUNT_LABEL = NAME + ".src.count";
-    static final String TOTAL_SIZE_LABEL = NAME + ".total.size";
-    static final String DST_DIR_LIST_LABEL = NAME + ".dst.dir.list";
+    public static final String EXEC_CMD_LABEL = NAME + ".exec.cmd";
+    public static final String TMP_DIR_LABEL = NAME + ".tmp.dir";
+    public static final String DST_DIR_LABEL = NAME + ".dest.path";
+    public static final String JOB_DIR_LABEL = NAME + ".job.dir";
+    public static final String MAX_MAPS_LABEL = NAME + ".max.map.tasks";
+    public static final String SRC_LIST_LABEL = NAME + ".src.list";
+    public static final String SRC_COUNT_LABEL = NAME + ".src.count";
+    public static final String TOTAL_SIZE_LABEL = NAME + ".total.size";
+    public static final String DST_DIR_LIST_LABEL = NAME + ".dst.dir.list";
 
     private JobConf conf;
 
@@ -118,35 +116,6 @@ public class DistExec implements Tool {
         setConf(conf);
     }
 
-    /**
-     * An input/output pair of filenames.
-     */
-    static class FilePair implements Writable {
-        FileStatus input = new FileStatus();
-        String output;
-
-        FilePair() {
-        }
-
-        FilePair(FileStatus input, String output) {
-            this.input = input;
-            this.output = output;
-        }
-
-        public void readFields(DataInput in) throws IOException {
-            input.readFields(in);
-            output = Text.readString(in);
-        }
-
-        public void write(DataOutput out) throws IOException {
-            input.write(out);
-            Text.writeString(out, output);
-        }
-
-        public String toString() {
-            return input + " : " + output;
-        }
-    }
 
     /**
      * InputFormat of a distexec job responsible for generating splits of the src
@@ -214,183 +183,6 @@ public class DistExec implements Tool {
         public RecordReader<Text, Text> getRecordReader(InputSplit split,
                                                         JobConf job, Reporter reporter) throws IOException {
             return new SequenceFileRecordReader<Text, Text>(job, (FileSplit) split);
-        }
-    }
-
-    /**
-     * ExecFilesMapper: The mapper for copying files between FileSystems.
-     */
-    static class ExecFilesMapper implements Mapper<LongWritable, FilePair, WritableComparable<?>, Text> {
-        // config
-        private FileSystem destFileSys = null;
-        private boolean ignoreReadFailures;
-        private Path destPath = null;
-        private String execCmd = null;
-        private JobConf job;
-        private int sizeBuf = 128 * 1024;
-
-        // stats
-        private int failcount = 0;
-        private int skipcount = 0;
-        private int copycount = 0;
-
-        private void updateStatus(Reporter reporter) {
-            reporter.setStatus("Processing and stuff");
-        }
-
-        private FSDataOutputStream create(Path f, Reporter reporter,
-                                          FileStatus srcstat) throws IOException {
-            if (destFileSys.exists(f)) {
-                destFileSys.delete(f, false);
-            }
-            return destFileSys.create(f, true, sizeBuf, reporter);
-        }
-
-        private void execution(FileStatus srcstat, Path relativedst,
-                          OutputCollector<WritableComparable<?>, Text> outc, Reporter reporter)
-                throws IOException {
-            Path absdst = new Path(destPath, relativedst);
-            int totfiles = job.getInt(SRC_COUNT_LABEL, -1);
-            assert totfiles >= 0 : "Invalid file count " + totfiles;
-
-            // if a directory, ensure created even if empty
-            if (srcstat.isDir()) {
-                if (destFileSys.exists(absdst)) {
-                    if (!destFileSys.getFileStatus(absdst).isDir()) {
-                        throw new IOException("Failed to mkdirs: " + absdst+" is a file.");
-                    }
-                }
-                else if (!destFileSys.mkdirs(absdst)) {
-                    throw new IOException("Failed to mkdirs " + absdst);
-                }
-                // TODO: when modification times can be set, directories should be
-                // emitted to reducers so they might be preserved. Also, mkdirs does
-                // not currently return an error when the directory already exists;
-                // if this changes, all directory work might as well be done in reduce
-                return;
-            }
-
-            Path tmpfile = new Path(job.get(TMP_DIR_LABEL), relativedst);
-            FSDataInputStream in = null;
-            FSDataOutputStream out = null;
-            try {
-                // open src file
-                in = srcstat.getPath().getFileSystem(job).open(srcstat.getPath());
-                reporter.incrCounter(Counter.BYTESEXECUTED, srcstat.getLen());
-                // open tmp file
-                out = create(tmpfile, reporter, srcstat);
-
-                Executor executor = new Executor(this.execCmd, in, out);
-                executor.execute();
-                reporter.incrCounter(Counter.BYTESWRITTEN, executor.getBytesOutputCount());
-            } catch(InterruptedException iex) {
-                throw new IOException("Process was interrupted", iex);
-            } finally {
-                checkAndClose(in);
-                checkAndClose(out);
-            }
-
-            if (totfiles == 1) {
-                // Running a single file; use dst path provided by user as destination
-                // rather than destination directory, if a file
-                Path dstparent = absdst.getParent();
-                if (!(destFileSys.exists(dstparent) &&
-                        destFileSys.getFileStatus(dstparent).isDir())) {
-                    absdst = dstparent;
-                }
-            }
-            if (destFileSys.exists(absdst) &&
-                    destFileSys.getFileStatus(absdst).isDir()) {
-                throw new IOException(absdst + " is a directory");
-            }
-            if (!destFileSys.mkdirs(absdst.getParent())) {
-                throw new IOException("Failed to create parent dir: " + absdst.getParent());
-            }
-            rename(tmpfile, absdst);
-
-            // report at least once for each file
-            ++copycount;
-            reporter.incrCounter(Counter.EXECUTED, 1);
-            updateStatus(reporter);
-        }
-
-        /** rename tmp to dst, delete dst if already exists */
-        private void rename(Path tmp, Path dst) throws IOException {
-            try {
-                if (destFileSys.exists(dst)) {
-                    destFileSys.delete(dst, true);
-                }
-                if (!destFileSys.rename(tmp, dst)) {
-                    throw new IOException();
-                }
-            }
-            catch(IOException cause) {
-                throw (IOException)new IOException("Fail to rename tmp file (=" + tmp
-                        + ") to destination file (=" + dst + ")").initCause(cause);
-            }
-        }
-
-
-        public void map(LongWritable key, FilePair value, OutputCollector<WritableComparable<?>, Text> out,
-                        Reporter reporter) throws IOException {
-
-            final FileStatus srcstat = value.input;
-            final Path relativedst = new Path(value.output);
-            try {
-                execution(srcstat, relativedst, out, reporter);
-            } catch (IOException e) {
-                ++failcount;
-                reporter.incrCounter(Counter.FAIL, 1);
-                updateStatus(reporter);
-                final String sfailure = "FAIL " + relativedst + " : " +
-                        StringUtils.stringifyException(e);
-                out.collect(null, new Text(sfailure));
-                LOG.info(sfailure);
-                try {
-                    for (int i = 0; i < 3; ++i) {
-                        try {
-                            final Path tmp = new Path(job.get(TMP_DIR_LABEL), relativedst);
-                            if (destFileSys.delete(tmp, true))
-                                break;
-                        } catch (Throwable ex) {
-                            // ignore, we are just cleaning up
-                            LOG.debug("Ignoring cleanup exception", ex);
-                        }
-                        // update status, so we don't get timed out
-                        updateStatus(reporter);
-                        Thread.sleep(3 * 1000);
-                    }
-                } catch (InterruptedException inte) {
-                    throw (IOException)new IOException().initCause(inte);
-                }
-            } finally {
-                updateStatus(reporter);
-            }
-        }
-
-        static String bytesString(long b) {
-            return b + " bytes (" + StringUtils.humanReadableInt(b) + ")";
-        }
-
-        public void close() throws IOException {
-
-        }
-
-        /** Mapper configuration.
-         * Extracts source and destination file system, as well as
-         * top-level paths on source and destination directories.
-         * Gets the named file systems, to be used later in map.
-         */
-        public void configure(JobConf job) {
-            destPath = new Path(job.get(DST_DIR_LABEL, "/"));
-            try {
-                destFileSys = destPath.getFileSystem(job);
-            } catch (IOException ex) {
-                throw new RuntimeException("Unable to get the named file system.", ex);
-            }
-            execCmd = job.get(EXEC_CMD_LABEL);
-            sizeBuf = job.getInt("copy.buf.size", 128 * 1024);
-            this.job = job;
         }
     }
 
@@ -684,8 +476,8 @@ public class DistExec implements Tool {
         jobConf.set(EXEC_CMD_LABEL, args.execCmd);
 
         //set boolean values
-        jobConf.setBoolean(Options.SINGLE_OUT.propertyname,
-                args.flags.contains(Options.SINGLE_OUT));
+        jobConf.setBoolean(Options.REDIRECT_ERROR_TO_OUT.propertyname,
+                args.flags.contains(Options.REDIRECT_ERROR_TO_OUT));
 
         final String randomId = getRandomId();
         JobClient jClient = new JobClient(jobConf);
@@ -881,7 +673,7 @@ public class DistExec implements Tool {
         }
     }
 
-    static boolean checkAndClose(java.io.Closeable io) {
+    public static boolean checkAndClose(java.io.Closeable io) {
         if (io != null) {
             try {
                 io.close();

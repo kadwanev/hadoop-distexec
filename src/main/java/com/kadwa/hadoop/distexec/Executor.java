@@ -37,6 +37,7 @@ public class Executor {
 
         ProcessBuilder builder = new ProcessBuilder(commandArgs);
 
+//        builder.redirectError()
 //        builder.directory(new File("."));
 
         executor = SingleExecution.execute(builder, in, out, System.err);
