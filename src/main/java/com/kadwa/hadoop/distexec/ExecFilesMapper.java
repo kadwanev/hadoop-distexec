@@ -17,6 +17,8 @@ import org.apache.hadoop.mapred.Reporter;
 import org.apache.hadoop.util.StringUtils;
 
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 
 public class ExecFilesMapper implements Mapper<LongWritable, FilePair, WritableComparable<?>, Text> {
 
@@ -41,18 +43,47 @@ public class ExecFilesMapper implements Mapper<LongWritable, FilePair, WritableC
         reporter.setStatus("Processing and stuff");
     }
 
-    private FSDataOutputStream create(Path f, Reporter reporter,
-                                      FileStatus srcstat) throws IOException {
-        if (destFileSys.exists(f)) {
-            destFileSys.delete(f, false);
+    class LazyCreateOutputStream extends OutputStream {
+        private Path path;
+        private Reporter reporter;
+        private OutputStream out;
+
+        LazyCreateOutputStream(Path path, Reporter reporter) {
+            this.path = path;
+            this.reporter = reporter;
+            this.out = null;
         }
-        return destFileSys.create(f, true, sizeBuf, reporter);
+
+        public void write(int b) throws IOException {
+            if (out == null) {
+                if (destFileSys.exists(path)) {
+                    destFileSys.delete(path, false);
+                }
+                out = destFileSys.create(path, true, sizeBuf, reporter);
+            }
+            out.write(b);
+        }
+
+        @Override
+        public void flush() throws IOException {
+            if (out != null) {
+                out.flush();
+            }
+        }
+
+        @Override
+        public void close() throws IOException {
+            if (out != null) {
+                out.close();
+            }
+        }
     }
 
-    private void execution(FileStatus srcstat, Path relativedst,
+    private void execution(FileStatus srcstat, String relativedst,
                            OutputCollector<WritableComparable<?>, Text> outc, Reporter reporter)
             throws IOException {
         Path absdst = new Path(destPath, relativedst);
+        Path abserr = new Path(destPath, relativedst+".stderr");
         int totfiles = job.getInt(DistExec.SRC_COUNT_LABEL, -1);
         assert totfiles >= 0 : "Invalid file count " + totfiles;
 
@@ -74,16 +105,20 @@ public class ExecFilesMapper implements Mapper<LongWritable, FilePair, WritableC
         }
 
         Path tmpfile = new Path(job.get(DistExec.TMP_DIR_LABEL), relativedst);
-        FSDataInputStream in = null;
-        FSDataOutputStream out = null;
+        Path errfile = new Path(job.get(DistExec.TMP_DIR_LABEL), relativedst+".stderr");
+        InputStream in = null;
+        OutputStream out = null;
+        OutputStream err = null;
         try {
             // open src file
             in = srcstat.getPath().getFileSystem(job).open(srcstat.getPath());
             reporter.incrCounter(Counter.BYTESEXECUTED, srcstat.getLen());
-            // open tmp file
-            out = create(tmpfile, reporter, srcstat);
 
-            Executor executor = new Executor(this.execCmd, in, out);
+            // open tmp file
+            out = new LazyCreateOutputStream(tmpfile, reporter);
+            err = new LazyCreateOutputStream(errfile, reporter);
+
+            Executor executor = new Executor(this.execCmd, in, out, err);
             executor.execute();
             reporter.incrCounter(Counter.BYTESWRITTEN, executor.getBytesOutputCount());
         } catch(InterruptedException iex) {
@@ -110,6 +145,7 @@ public class ExecFilesMapper implements Mapper<LongWritable, FilePair, WritableC
             throw new IOException("Failed to create parent dir: " + absdst.getParent());
         }
         rename(tmpfile, absdst);
+        rename(errfile, abserr);
 
         // report at least once for each file
         ++copycount;
@@ -123,7 +159,7 @@ public class ExecFilesMapper implements Mapper<LongWritable, FilePair, WritableC
             if (destFileSys.exists(dst)) {
                 destFileSys.delete(dst, true);
             }
-            if (!destFileSys.rename(tmp, dst)) {
+            if (destFileSys.exists(tmp) && !destFileSys.rename(tmp, dst)) {
                 throw new IOException();
             }
         }
@@ -138,7 +174,7 @@ public class ExecFilesMapper implements Mapper<LongWritable, FilePair, WritableC
                     Reporter reporter) throws IOException {
 
         final FileStatus srcstat = value.input;
-        final Path relativedst = new Path(value.output);
+        final String relativedst = value.output;
         try {
             execution(srcstat, relativedst, out, reporter);
         } catch (IOException e) {

@@ -8,22 +8,26 @@ import org.apache.hadoop.fs.FSDataOutputStream;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.util.Arrays;
 import java.util.HashSet;
 
 public class Executor {
 
     private String execCmd;
-    private FSDataInputStream in;
-    private FSDataOutputStream out;
+    private InputStream in;
+    private OutputStream out;
+    private OutputStream err;
 
     private int exitVal;
     private SingleExecution executor;
 
-    public Executor(String execCmd, FSDataInputStream in, FSDataOutputStream out) {
+    public Executor(String execCmd, InputStream in, OutputStream out, OutputStream err) {
         this.execCmd = execCmd;
         this.in = in;
         this.out = out;
+        this.err = err;
     }
 
     private static boolean isGrepException(String command) {
@@ -40,7 +44,7 @@ public class Executor {
 //        builder.redirectError()
 //        builder.directory(new File("."));
 
-        executor = SingleExecution.execute(builder, in, out, System.err);
+        executor = SingleExecution.execute(builder, in, out, err);
 
         exitVal = executor.waitFor();
         if ((grepException && ( exitVal != 0 && exitVal != 1 )) || (!grepException && exitVal != 0))

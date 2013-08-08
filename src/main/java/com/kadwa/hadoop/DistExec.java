@@ -37,7 +37,6 @@ maintaining Props.
 package com.kadwa.hadoop;
 
 import com.kadwa.hadoop.distexec.ExecFilesMapper;
-import com.kadwa.hadoop.distexec.Executor;
 import com.kadwa.hadoop.distexec.FilePair;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
